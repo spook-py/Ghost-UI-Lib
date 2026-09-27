@@ -1,1 +1,246 @@
 
+Ghost UI documentation
+
+Getting started
+
+    loadstring(readfile("GhostUI/GhostUI.lua"))()
+    local UI = _G.GhostUI
+
+Matcha's loadstring runs the file but throws away whatever it returns, so the library puts itself in
+_G.GhostUI. Always grab it from there.
+
+    local win = UI.Window({ Title = "MY HUB", Loader = true })
+    local main = win:Tab("Main", { Icon = "home" })
+    main:Toggle({ Name = "Auto farm", Callback = function(on) print(on) end })
+
+That's a full working hub. The loader plays, shrinks back into its square, and the window grows out of it.
+
+
+The window
+
+UI.Window(options) creates the menu. Every option is optional.
+
+    Title       Text shown in the loader, the sidebar and the watermark. Default "SCRIPT NAME".
+    Loader      true to play the intro animation first. Default false.
+    LoaderTime  How long the loader holds before morphing, in seconds. Default 1.2.
+    Width       Starting width. Default 700. The user can resize it with the corner grip.
+    Height      Starting height. Default 470.
+    Theme       "Mono", "Ocean", "Crimson", "Mint", "Violet" or "Amber". Default "Mono".
+    Key         Key that hides and shows the menu. Default "RSHIFT".
+    Icon        Asset name or file path for the header icon. Default the white ghost.
+    AutoLoad    false to skip loading the autoload config on start. Default true.
+    Watermark   false to start with the watermark hidden.
+    Keybinds    false to start with the keybind list hidden.
+    Active      false to start with the active features list hidden.
+
+Window methods:
+
+    win:Tab(name, { Icon = "sword" })  Adds a sidebar tab. Icon is optional (see Icons below).
+    win:Select(tab)                    Switches to a tab.
+    win:SetVisible(bool) / win:Toggle()
+    win:SetMinimized(bool)             Same as clicking the minimise button in the header.
+    win:SetToggleKey("F4")             Changes the hide key. Takes a key name or a virtual key code.
+    win:SetTheme("Ocean")              Fades every colour to the new theme. Also takes a table of colours.
+    win:SetOverlay(name, bool)         name is "Watermark", "Keybinds" or "Active".
+    win:Dialog(options)                Opens a popup. See Dialogs below.
+    win:Notify(options)                Same as UI.Notify.
+    win:Stats()                        Returns { frameMs, drawings, fps } so you can check the cost.
+    win:Destroy()                      Removes everything and gives Roblox its input back.
+    win.Flags[flag]                    The current value of every control, kept up to date.
+
+Things the window does on its own:
+    Hovering the sidebar slides it out and pushes the page over. It folds back when the mouse leaves.
+    Drag the top strip to move the window. Drag the bottom right corner to resize it.
+    The minus button in the header folds the window down to just the header bar.
+    The search box in the header finds any control by name. Clicking a result jumps straight to it,
+    opens its section if it was folded, scrolls to it and flashes it.
+    While the mouse is over the window, or you are typing or dragging, Roblox input is blocked so
+    clicks and keys don't leak into the game. It comes back the moment you leave or hide the menu.
+    Scrolling is done with the scrollbar on the right. Matcha has no mouse wheel API, so dragging the
+    bar or clicking the empty track is the only way.
+
+
+Tabs, sub tabs and columns
+
+    local tab = win:Tab("Combat", { Icon = "sword" })
+
+Controls can go straight on a tab. For a busier tab you can split it into sub tabs, which adds a
+pill switcher under the page title:
+
+    local aura, aim, misc = tab:SubTabs({ "Aura", "Aimbot", "Misc" })
+    aura:Toggle({ Name = "Kill aura" })
+
+Call SubTabs before adding controls to that tab. Anything added straight to the tab after that
+won't be shown.
+
+Any tab or sub tab can be split into two columns:
+
+    local left, right = tab:Columns()
+    left:Toggle({ Name = "One" })
+    right:Toggle({ Name = "Two" })
+
+Each column scrolls with the page and has its own sections.
+
+
+Controls
+
+Every control accepts:
+    Name      The label on the row.
+    Tip       Tooltip text that fades in after hovering the row for a moment.
+    Flag      Key used in win.Flags and configs. Defaults to Name, so give it one if two controls
+              share a name.
+    Callback  Called whenever the value changes. Callbacks run in their own thread and errors are
+              caught and printed, so a broken callback can't freeze the menu.
+
+Right clicking any control resets it to its default. Most controls return an object with :Set(value)
+and :Get().
+
+Section
+    tab:Section("Farming", { Collapsed = false })
+    A small heading with a line. Click it to fold every control under it until the next section.
+
+Label
+    local l = tab:Label("Some text")      l:Set("New text")
+
+Toggle
+    tab:Toggle({ Name, Default = false, Keybind = "G", Callback = function(on) end })
+    Keybind is optional. When given, a small key box appears on the row and pressing that key flips
+    the toggle. Click the box to rebind it, Esc clears it. Use Keybind = "NONE" for an empty box.
+
+Slider
+    tab:Slider({ Name, Min = 0, Max = 100, Default = 0, Step = 1, Suffix = "", Callback = function(v) end })
+    Drag the track, or click the number on the right to type an exact value. Enter confirms,
+    Esc cancels.
+
+RangeSlider
+    tab:RangeSlider({ Name, Min, Max, Step, Default = { 10, 20 }, Suffix, Callback = function(lo, hi) end })
+    Two handles. Clicking moves whichever handle is closer.
+
+Button
+    tab:Button({ Name, Callback, Confirm = false, ConfirmText = "Click again to confirm" })
+    With Confirm on, the first click arms it for 2.5 seconds and the second click runs it.
+
+Dropdown
+    tab:Dropdown({ Name, Options = { "A", "B" }, Default = "A", Multi = false, Search = false, Callback })
+    Multi lets you pick several. The callback then gets a list, and Default should be a list too.
+    Search adds a filter box at the top. Type to narrow the list, Enter picks the first match.
+    dropdown:Refresh(newOptions) swaps the options out.
+    Open dropdowns close when you click somewhere else. Scrolling the page doesn't close them.
+
+PlayerDropdown
+    tab:PlayerDropdown({ Name, Multi = false, IncludeSelf = false, Callback = function(name) end })
+    A searchable dropdown that fills itself with the server's player names and updates every
+    two seconds.
+
+Keybind
+    tab:Keybind({ Name, Default = "F", Mode = "Press", Callback, Changed = function(vk, name) end })
+    Mode "Press" calls Callback() on each press.
+    Mode "Toggle" flips an on and off state and calls Callback(state).
+    Mode "Hold" calls Callback(true) on press and Callback(false) on release.
+    Click the key box to rebind, Esc clears. Changed fires after a rebind.
+    If you bind a key that's already in use you get a notification saying what else uses it.
+
+ColorPicker
+    tab:ColorPicker({ Name, Default = Color3.fromRGB(255, 80, 80), Callback = function(color) end })
+    Click the row to open the saturation square and hue bar.
+
+Textbox
+    tab:Textbox({ Name, Default = "", Placeholder = "Type here", MaxLength = 64, Callback = function(text) end })
+    Click to type. Arrow keys, Home and End move the caret, Ctrl with arrows jumps words,
+    Ctrl+Backspace deletes a word, Delete works too. Enter or clicking away saves, Esc cancels.
+
+Stat
+    local coins = tab:Stat({ Name = "Coins", Value = 0, Prefix = "", Suffix = "", Decimals = 0 })
+    coins:Set(1240)
+    A read only row. Numbers count up smoothly and get thousands separators.
+
+Progress
+    local bar = tab:Progress({ Name = "Quest", Value = 0, Max = 100, Suffix = nil })
+    bar:Set(40)            bar:Set(3, 10) changes the max too.
+    Leave Suffix out to show a percentage, or give one (even "") to show "value / max".
+
+
+Dialogs
+
+    win:Dialog({
+        Title = "Unload the script?",
+        Content = "Everything will stop and the menu will close.",
+        Buttons = {
+            { Name = "Cancel" },
+            { Name = "Unload", Primary = true, Callback = function() win:Destroy() end },
+        },
+    })
+
+Up to three buttons, laid out from the right. The primary button is filled with the accent colour.
+Enter presses the primary button and Esc closes the dialog without running anything. The rest of the
+menu is dimmed and locked while it's open.
+
+
+Notifications
+
+    UI.Notify({ Title = "Saved", Content = "Config saved.", Duration = 4 })
+
+They stack in the top left and several can be up at once. Long content wraps. Hovering one pauses its
+timer. Notify returns a handle with :Dismiss() if you want to remove one early. Notifications work
+without a window too.
+
+
+Overlays
+
+Three small panels live outside the window and stay on screen when the menu is hidden:
+    Watermark   Top right. Script name, FPS, ping and the time.
+    Active      Every toggle that's currently on.
+    Keybinds    Every bound key, its mode, and whether it's active right now.
+While the menu is open you can drag the Active and Keybinds panels by their title. Turn them on or
+off with win:SetOverlay.
+
+
+Configs
+
+    win:SaveConfig("main")          Saves every flag to GhostUI/configs/main.json
+    win:LoadConfig("main")          Applies it. Returns true if it worked.
+    win:ListConfigs()               Names of every saved config.
+    win:SetAutoload("main")         Loads that config automatically next time. Pass nil to clear it.
+    win:GetAutoload()
+    win:ExportConfig()              Returns the config as text and copies it to the clipboard.
+    win:ImportConfig(text)          Applies config text. With no text it reads
+                                    GhostUI/configs/import.txt instead, because Matcha can write to
+                                    the clipboard but can't read from it. Paste into that file and
+                                    call ImportConfig().
+
+Toggle keybinds are saved alongside their toggles. To keep a control out of configs, remove it after
+creating it: win.elements[flag] = nil.
+
+
+Themes
+
+UI.Themes lists the built in names. win:SetTheme also accepts your own table, for example
+win:SetTheme({ Accent = { 255, 120, 200 }, KnobOn = { 255, 255, 255 } }). Anything you leave out uses
+the base colours. The colour keys are Bg, Side, Border, Line, Row, RowBorder, RowHover, RowBorderHover,
+Pill, PillBorder, HoverPill, Text, Accent, Track, KnobOff, KnobOn, Field, Option and Shade.
+
+
+Icons
+
+Built in tab icons: home, sword, eye, gear, user, bolt (also listed in UI.Icons). You can also pass a
+file path to your own icon. Matcha's readfile refuses .png files, so save the image as base64 text in
+a .txt file and pass that path. White icons on a transparent background look best.
+
+
+The loader on its own
+
+    local l = UI.new({ Title = "LOADING" })
+    l:Finish(true)              Plays the closing animation and waits for it.
+    UI.Play({ Title = "HI" })   Fire and forget.
+
+
+Keys
+
+Key names are letters, digits, F1 to F12, SPACE, ENTER, ESC, TAB, BACK, CAPS, arrows (LEFT, UP,
+RIGHT, DOWN), HOME, END, INS, DEL, PGUP, PGDN, LSHIFT, RSHIFT, LCTRL, RCTRL, LALT, RALT, the mouse
+buttons MB2 to MB5, and punctuation like - = [ ] ; ' , . /. UI.KeyName(vk) and UI.KeyCode(name)
+convert between names and codes.
+
+
+
+win:Stats().frameMs tells you what the menu costs per frame if you ever want to check.
