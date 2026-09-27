@@ -3,8 +3,8 @@ Ghost UI documentation
 
 Getting started
 
-    loadstring(readfile("GhostUI/GhostUI.lua"))()
-    local UI = _G.GhostUI
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/spook-py/Ghost-UI-Lib/refs/heads/main/loader.lua"))()
+        local UI = _G.GhostUI
 
 Matcha's loadstring runs the file but throws away whatever it returns, so the library puts itself in
 _G.GhostUI. Always grab it from there.
